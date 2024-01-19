@@ -8,7 +8,7 @@
 #include <Wire.h>
 #include <SPI.h>
 
-#include "SparkFun_SCD4x_Arduino_Library.h" 
+#include <ScioSense_ENS160.h>
 
 #include <Adafruit_SSD1306.h>
 #include <Adafruit_GFX.h>
@@ -22,12 +22,12 @@ void update_display();
  
 const char* ssid = "TRNNET-2G";
 const char* password = "ripcord1";
-const char *hostname="ESP_SDC40";
+const char *hostname="ESP_ens160";
 
-SCD4x mySensor;
+ScioSense_ENS160      mySensor(ENS160_I2CADDR_1);
 uint16_t co2;
-float temp;
-float humidity;
+uint16_t aqi;
+uint16_t tvoc;
 
 uint16_t co2_min=9999;
 uint16_t co2_max=0;
@@ -68,9 +68,9 @@ void getco2(){
 
    message+=String(co2);
    message+="\t";
-   message+=String(temp);
+   message+=String(aqi);
    message+="\t";
-   message+=String(humidity);
+   message+=String(tvoc);
    message+="\t";
    message+=String(co2_overall_max);
    message+="\t";
@@ -103,7 +103,7 @@ void getSettings() {
  
     if (server.arg("signalStrength")== "true"){
         response+= ",\"signalStrengh\": \""+String(WiFi.RSSI())+"\"";
-    }SCD4x mySensor;
+    }
  
     if (server.arg("chipInfo")== "true"){
         response+= ",\"chipId\": \""+String(ESP.getChipId())+"\"";
@@ -130,6 +130,7 @@ void restServerRouting() {
     server.on(F("/co2"),HTTP_GET,getco2);
 }
  
+
 // Manage not found URL
 void handleNotFound() {
   String message = "File Not Found\n\n";
@@ -159,7 +160,7 @@ void update_display()
 
       display.printf("CO2: %u\n",co2) ;
       display.setTextSize(1,2);
-      display.printf("T: %.1f C  H:%.1f %%",temp,humidity);
+      display.printf("AQI: %u  TVOC:%u",aqi,tvoc);
 }    
   display.display();
 }
@@ -167,10 +168,16 @@ void update_display()
 void updater()
 {
 
+ if (mySensor.available()) {
+  mySensor.measure(true);
+  mySensor.measureRaw(true);
+  
+
   Serial.println("Updater");
-  co2=mySensor.getCO2();
-  temp=mySensor.getTemperature();
-  humidity=mySensor.getHumidity();
+  co2=mySensor.geteCO2();
+  aqi=mySensor.getAQI();
+  tvoc=mySensor.getTVOC();
+ }
 
   if (co2<co2_min)
      co2_min=co2;
@@ -218,11 +225,17 @@ void setup(void) {
 
   Wire.begin();
 
-   if (mySensor.begin() == false)
-  {
-    Serial.println(F("Sensor not detected. Please check wiring. Freezing..."));
-    while (1)
-      ;
+    Serial.print("ENS160...");
+  mySensor.begin();
+  Serial.println(mySensor.available() ? "done." : "failed!");
+  if (mySensor.available()) {
+    // Print ENS160 versions
+    Serial.print("\tRev: "); Serial.print(mySensor.getMajorRev());
+    Serial.print("."); Serial.print(mySensor.getMinorRev());
+    Serial.print("."); Serial.println(mySensor.getBuild());
+  
+    Serial.print("\tStandard mode ");
+    Serial.println(mySensor.setMode(ENS160_OPMODE_STD) ? "done." : "failed!");
   }
  
   
